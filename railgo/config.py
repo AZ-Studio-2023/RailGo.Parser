@@ -186,8 +186,8 @@ PIPE_TRAIN_PROCESSORS = [
     "getTrainRundays",
     "getTrainMain",
     "getTrainMap",
-    "getTrainKind",
-    "getStopDistanceAndDiagram"
+    "getStopDistanceAndDiagram",
+    "getSpeed"
 ]
 PIPE_STATION_PROCESSORS = [
     "getDetailedFreightInfo",

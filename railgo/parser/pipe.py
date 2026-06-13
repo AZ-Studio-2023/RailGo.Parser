@@ -6,6 +6,7 @@ from railgo.parser.parse.station import *
 from railgo.parser.parse.map import *
 from functools import wraps
 import time
+import copy
 import tqdm
 import tqdm_logging_wrapper as tqdl
 import sys
@@ -106,7 +107,6 @@ def init_map():
 def launchMainPipe():
     ts = time.time()
     init_stations()
-    #init_map()
     init_train()
     PIPE_POOL.shutdown(wait=True)
     LOGGER.info("=======爬取完成=======")

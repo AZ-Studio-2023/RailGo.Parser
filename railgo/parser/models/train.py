@@ -20,8 +20,10 @@ class TrainModel(object):
     route = []
 
     isFuxing = False
+    isReconnection = False
 
     _beginDay = ""
+    _dataBeginDay = ""
 
     def toJson(self):
         return {
