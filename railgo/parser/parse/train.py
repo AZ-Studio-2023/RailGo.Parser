@@ -50,6 +50,21 @@ def getTrainMap(inst):
     LOGGER.debug(f"车次地图信息拼接 {inst.number}: 完成")
     return inst
 
+def getCarBackup(inst):
+    '''交路车型不全的情况下尝试补全'''
+    try:
+        r = post("https://mobile.12306.cn/wxxcx/openplatform-inner/miniprogram/wifiapps/appFrontEnd/v2/lounge/open-smooth-common/qrCode/getDeptByTrainCode", data = {
+            "trainCode": inst.number,
+            "reqType": "form"
+        })
+        d = r.json()
+        if "data" in d["content"]:
+            inst.runner = d["content"]["data"]["deptName"]
+            if inst.car == "":
+                inst.car = d["content"]["data"]["carInfo"]["trainStyle"]
+    except Exception as e:
+        LOGGER.exception(e)
+    return inst
 
 def getTrainMain(inst):
     '''列车时刻表，担当段和车型'''
@@ -116,6 +131,7 @@ def getTrainMain(inst):
             inst.spend = int(crj["data"]["trainDetail"]
                              ["stopTime"][-1]["runningTime"])
             inst.numberFull = list(sorted(list(tctemp)))
+
             if "train_style" in crj["data"]["trainDetail"]["stopTime"][0]:
                 style = crj["data"]["trainDetail"]["stopTime"][0]["train_style"]
                 if style in CAR_STYLE_CODE_MAP:
@@ -136,7 +152,7 @@ def getTrainMain(inst):
                 
                 if reconnectionFlag:
                     inst.car += " 重联"
-            elif inst.car in CAR_STYLE_NAME_MAP:  # 普速
+            if inst.car in CAR_STYLE_NAME_MAP:  # 普速
                 inst.car = CAR_STYLE_NAME_MAP[inst.car]
         except Exception as e:
             return getTrainMainDowngrade(inst)
@@ -189,11 +205,11 @@ def getTrainMainDowngrade(inst):
                     d["data"]["data"][0]["train_class_name"].replace(
                         "快慢", "普慢")
 
-    r = post("https://mobile.12306.cn/wxxcx/wechat/bigScreen/queryTrainBureau", data={
-        "queryDate": inst._beginDay,
-        "trainCode": inst.number
-    })
-    d = r.json()
+    # r = post("https://mobile.12306.cn/wxxcx/wechat/bigScreen/queryTrainBureau", data={
+    #    "queryDate": inst._beginDay,
+    #    "trainCode": inst.number
+    # })
+    # d = r.json()
     # inst.bureau = d["data"]["bureau_code"]
     # inst.bureauName = BUREAU_SHORT_CODE.get(inst.bureau, "未知")
 
@@ -231,9 +247,9 @@ def getTrainRundays(inst):
     LOGGER.debug(f"车次开行计划 {inst.number}: 完成")
     return inst
 
-
 def getTrainKind(inst):
     '''获取车种（丐版时刻表）'''
+    raise DeprecationWarning
     if inst.number.startswith("G"):
         inst.type = "高速"
     elif inst.number.startswith("D") or inst.number.startswith("C"):
@@ -245,9 +261,7 @@ def getTrainKind(inst):
             f"https://mobile.12306.cn/weixin/wxcore/queryByTrainNo?train_no={inst.code}&depart_date={datetime.datetime.strptime(inst._beginDay,'%Y%m%d').strftime('%Y-%m-%d')}")
         d = r.json()
         if len(d["data"]["data"]) == 0:
-            # 图纸车
-            LOGGER.debug(f"{inst.number} 无级别信息")
-            raise LookupError
+            return inst
 
         if d["data"]["data"][0]["train_class_name"] in ["高速", "动车"]:
             inst.type = d["data"]["data"][0]["train_class_name"]
@@ -308,13 +322,6 @@ def getStopDistanceAndDiagram(inst):
                 STATION_MAP_CACHE[day+t] = res
                 LOGGER.debug(f"缓存车站车次: {day} {t}")
 
-            if inst.number.startswith("G"):
-                inst.type = "高速"
-            elif inst.number.startswith("D") or inst.number.startswith("C"):
-                inst.type = "动车"
-            elif inst.number.startswith("S"):
-                inst.type = "市域"
-            
             inf = []
             for x in inst.numberFull:
                 if x in STATION_MAP_CACHE[day+t]:
@@ -334,7 +341,8 @@ def getStopDistanceAndDiagram(inst):
                             inst.diagram = STATION_DIAGRAM_CACHE.pop(x)
                             break
                 inst.timetable[si] = stop
-                inst.type = inf[2]
+                if not inst.type:
+                    inst.type = inf[2]
     except Exception as e:
         LOGGER.exception(e)
     LOGGER.debug(f"车次交路里程 {inst.number}: 完成")
@@ -350,20 +358,4 @@ def getSpeed(inst):
         except:
             inst.timetable[x]["speed"] = -1
     LOGGER.debug(f"车次速度复算 {inst.number}: 完成")
-    return inst
-
-def getCarBackup(inst):
-    '''交路车型不全的情况下尝试补全'''
-    try:
-        r = post("https://mobile.12306.cn/wxxcx/openplatform-inner/miniprogram/wifiapps/appFrontEnd/v2/lounge/open-smooth-common/qrCode/getDeptByTrainCode", data = {
-            "trainCode": inst.number,
-            "reqType": "form"
-        })
-        d = r.json()
-        if "data" in d["content"]:
-            inst.runner = d["content"]["data"]["deptName"]
-            if inst.car == "":
-                inst.car = d["content"]["data"]["carInfo"]["trainStyle"]
-    except Exception as e:
-        LOGGER.exception(e)
     return inst
