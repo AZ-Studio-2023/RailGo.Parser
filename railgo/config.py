@@ -187,11 +187,13 @@ PIPE_TRAIN_PROCESSORS = [
     "getTrainMain",
     "getTrainMap",
     "getStopDistanceAndDiagram",
+    "getTrainDistanceCRGT",
     "getSpeed"
 ]
 PIPE_STATION_PROCESSORS = [
     "getDetailedFreightInfo",
-    "getLevel"
+    "getLevel",
+    "getSameCityStations"
 ]
 PIPE_TRAIN_EXPORTERS = [
     "EXPORTER.exportTrainInfo"
@@ -220,7 +222,7 @@ LOGGER = logging.getLogger("Parser")
 # LOGGER.addHandler(logging.StreamHandler())
 LOGGER.setLevel(logging.DEBUG)
 #LOGGER.setLevel(logging.INFO)
-LOGGER.addHandler(logging.FileHandler("./railgo.log"))
+LOGGER.addHandler(logging.RotatingFileHandler("./railgo.log", maxBytes=1024*1024*2.5, backupCount=2))
 
 # 重开
 
