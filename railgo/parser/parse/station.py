@@ -118,6 +118,26 @@ def getLevel(inst):
         LOGGER.debug(f"车站等级 {inst.name} 获取失败")
         return inst
 
+def getSameCityStations(inst):
+    try:
+        req = post("https://www.12306.cn/index/otn/index12306/queryScSname", data={
+            "station_telecode": restore_ky_telecode(inst.telecode)
+        })
+        ss = []
+        if "data" in req.json():
+            for x in req.json()["data"]:
+                if x.split(",")[0] != restore_ky_telecode(inst.telecode):
+                    ss.append({
+                        "stationTelecode": fix_ky_telecode(x.split(",")[0]),
+                        "stationName": x.split(",")[1]
+                    })
+            inst.sameCityStationList = ss
+            LOGGER.debug(f"同城车站 {inst.name} : {','.join([x['stationName'] for x in ss])}")
+        return inst
+    except Exception as e:
+        LOGGER.exception(e)
+        LOGGER.debug(f"同城车站 {inst.name} 获取失败")
+        return inst
 
 def get95572TmismList():
     try:

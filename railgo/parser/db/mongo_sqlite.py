@@ -8,7 +8,7 @@ class MongoSQLiteExporter(MongoJsonExporter):
         db = sqlite3.connect(self.export_location)
         cursor = db.cursor()
         cursor.execute("CREATE TABLE IF NOT EXISTS trains(code TEXT PRIMARY KEY NOT NULL, number TEXT NOT NULL,numberFull TEXT NOT NULL,numberKind TEXT NOT NULL,bureau TEXT,bureauName TEXT,type TEXT,diagramType TEXT,runner TEXT,car TEXT,carOwner TEXT,diagram TEXT,timetable TEXT NOT NULL,spend INT NOT NULL,rundays TEXT NOT NULL,route TEXT,isFuxing INT);")
-        cursor.execute("CREATE TABLE IF NOT EXISTS stations(telecode TEXT PRIMARY KEY NOT NULL,pinyin TEXT NOT NULL,pinyinTriple TEXT NOT NULL,tmism TEXT,name TEXT NOT NULL,level TEXT,bureau TEXT,belong TEXT,province TEXT,city TEXT,lines TEXT,type TEXT,trainList TEXT);")
+        cursor.execute("CREATE TABLE IF NOT EXISTS stations(telecode TEXT PRIMARY KEY NOT NULL,pinyin TEXT NOT NULL,pinyinTriple TEXT NOT NULL,tmism TEXT,name TEXT NOT NULL,level TEXT,bureau TEXT,belong TEXT,province TEXT,city TEXT,sameCityStations TEXT,lines TEXT,type TEXT,trainList TEXT);")
         db.commit()
         cursor.execute("DELETE FROM trains")
         cursor.execute("DELETE FROM stations")
@@ -28,8 +28,8 @@ class MongoSQLiteExporter(MongoJsonExporter):
                 db.rollback()
         for d in self.stationInfoList():
             try:
-                cursor.execute("INSERT INTO stations (telecode, pinyin, pinyinTriple, tmism, name, level, bureau, belong, province, city, lines, type, trainList) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                            (d["telecode"], d["pinyin"], d["pinyinTriple"], d["tmism"], d["name"], d["level"], d["bureau"], d["belong"], d["province"], d["city"], self._serializeJSON(d["lines"]), self._serializeJSON(d["type"]), self._serializeJSON(d["trainList"])))
+                cursor.execute("INSERT INTO stations (telecode, pinyin, pinyinTriple, tmism, name, level, bureau, belong, province, city, sameCityStations, lines, type, trainList) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            (d["telecode"], d["pinyin"], d["pinyinTriple"], d["tmism"], d["name"], d["level"], d["bureau"], d["belong"], d["province"], d["city"], self._serializeJSON(d["sameCityStationList"]), self._serializeJSON(d["lines"]), self._serializeJSON(d["type"]), self._serializeJSON(d["trainList"])))
                 db.commit()
             except Exception as e:
                 print(e)

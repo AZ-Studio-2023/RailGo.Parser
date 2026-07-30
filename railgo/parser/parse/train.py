@@ -348,6 +348,30 @@ def getStopDistanceAndDiagram(inst):
     LOGGER.debug(f"车次交路里程 {inst.number}: 完成")
     return inst
 
+def getTrainDistanceCRGT(inst):
+    '''国铁吉讯：获取列车运行里程'''
+    r = post("https://tripapi.ccrgt.com/crgt/trip-server-app/wx/train/getTrainInfoNode", json={
+        "params": {"trainNumber": inst.number, "date": datetime.datetime.strptime(inst._beginDay, "%Y%m%d").strftime("%Y-%m-%d")},
+        "isSign": 0,
+        "token": "",
+        "cguid": "",
+        "sign": ""
+    })
+    d = r.json()
+    ds = d["data"]["trainScheduleList"]
+    if d["code"] != 0:
+        return inst
+
+    distance_cache = [0]
+    for x in range(len(inst.timetable)):
+        if x != 0:
+            distance_cache.append(ds[x]["miles"] + distance_cache[x-1])
+        i = inst.timetable[x]
+        if i["distance"] == 0 and x!=0:
+            i["distance"] = distance_cache[x]
+        inst.timetable[x] = i
+
+    return inst
 
 def getSpeed(inst):
     '''里程信息得出后复算速度'''

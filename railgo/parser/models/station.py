@@ -12,12 +12,13 @@ class StationModel(object):
     province = ""
     city = ""
     trainList = []
+    sameCityStationList = []
 
     def toJson(self):
         return {
             "name": self.name,
             "tmism": self.tmism,
-            "level": self.level, 
+            "level": self.level,
             "telecode": self.telecode,
             "pinyin": self.pinyin,
             "pinyinTriple": self.pinyinTriple,
@@ -25,15 +26,16 @@ class StationModel(object):
             "belong": self.belong,
             "province": self.province,
             "city": self.city,
+            "sameCityStationList": self.sameCityStationList,
             "lines": self.lines,
             "type": self.type,
             "trainList": self.trainList
         }
 
     def __hash__(self):
-        return hash(self.tmism)
+        return hash(self.tmism+self.telecode)
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return self.tmism == other.tmism
+            return self.tmism+self.telecode == other.tmism+other.telecode
         return False
