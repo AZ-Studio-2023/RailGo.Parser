@@ -189,6 +189,7 @@ PIPE_TRAIN_PROCESSORS = [
     "getTrainMap",
     "getStopDistanceAndDiagram",
     "getTrainDistanceCRGT",
+    "getTrainDistanceCRGT",
     "getSpeed"
 ]
 PIPE_STATION_PROCESSORS = [
