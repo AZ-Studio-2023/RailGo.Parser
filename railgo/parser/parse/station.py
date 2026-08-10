@@ -55,9 +55,7 @@ def getHYFWList():
         yield i
 
         if isinstance(x["hyzdmc"], str):
-            belong = re.sub(
-                "中国铁路.+公司", "", x["hyzdmc"]).replace("车站", "站")
-            updateStationBelongInfo(i.telecode, i.bureau, belong)
+            updateStationBelongInfo(i.telecode, i.bureau, x["hyzdmc"])
 
 
 def getDetailedFreightInfo(inst):
@@ -183,6 +181,7 @@ def get95572TmismList():
 
 def updateStationBelongInfo(station, bureau, belong):
     '''从列车时刻表更新车站所属路局及车务段'''
+    belong = belong.replace("车站","站")
     if belong in STATION_CWD_SPECIAL_MAP:
         belong = STATION_CWD_SPECIAL_MAP[belong]
     elif not (belong.endswith("段") or belong.endswith("站")) and belong != "":

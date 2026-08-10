@@ -3,6 +3,5 @@ dbgtools/
 export/
 .vscode/
 railgo.log
-auto_deliver.py
-latest.zip
+railgo.log.*
 devtest.py
