@@ -224,8 +224,8 @@ logging.basicConfig(
 LOGGER = logging.getLogger("Parser")
 # LOGGER.addHandler(logging.StreamHandler())
 LOGGER.setLevel(logging.DEBUG)
-#LOGGER.setLevel(logging.INFO)
-LOGGER.addHandler(logging.handlers.RotatingFileHandler("./railgo.log", maxBytes=1024*1024*2.5, backupCount=2))
+# LOGGER.setLevel(logging.INFO)
+LOGGER.addHandler(logging.handlers.RotatingFileHandler("./railgo.log", maxBytes=1024*1024*8, backupCount=1))
 
 # 重开
 

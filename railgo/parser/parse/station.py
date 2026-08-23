@@ -10,7 +10,8 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 import base64
 import re
-
+import retry
+import itertools
 
 def getKYFWList():
     '''12306车站汇总'''
@@ -47,20 +48,19 @@ def getHYFWList():
     for x in req.json()["data"]:
         i = StationModel()
         i.type = ["货"]
-        i.name = x["hzzm"]
+        i.name = re.sub("\(*境\)*", "", x["hzzm"])
         i.telecode = x["dbm"]
         i.tmism = x["tmism"]
         i.bureau = BUREAU_SGCODE[x["ljjc"]]
-        i.pinyin, i.pinyinTriple = stationPinyin(x["hzzm"], x["pym"])
+        i.pinyin, i.pinyinTriple = stationPinyin(i.name, x["pym"])
         yield i
 
         if isinstance(x["hyzdmc"], str):
             updateStationBelongInfo(i.telecode, i.bureau, x["hyzdmc"])
 
-
+@retry.retry(tries=5, delay=5)
 def getDetailedFreightInfo(inst):
     if "货" not in inst.type:
-        LOGGER.debug(f"车站办理范围 {inst.name}: 客")
         return inst
 
     req = post("https://ec.95306.cn/api/zx/czmpxx/queryByTimism",
@@ -81,15 +81,12 @@ def getDetailedFreightInfo(inst):
             inst.type.append("快")
         if d["jbxxList"][8]["vlaue"] == "是":
             inst.type.append("行")
-        LOGGER.debug(f"车站办理范围 {inst.name}: {' '.join(inst.type)}")
-        LOGGER.debug(f"车站地址 {inst.name}: {inst.province}{inst.city}")
         return inst
     except Exception as e:
         LOGGER.exception(e)
-        LOGGER.debug(f"车站附加信息 {inst.name} 获取失败")
         return inst
 
-
+@retry.retry(tries=5, delay=5)
 def getLevel(inst):
     if "货" not in inst.type and "通" not in inst.type:
         return inst
@@ -105,15 +102,14 @@ def getLevel(inst):
                        "OutFields": "*",
                        "f": "json"
                    })
-        inst.level = req.json()["features"][0]["attributes"]["GRADE"]
-        if inst.level == " " or inst.level == None or inst.level == "":
-            inst.level = "未知"
-        LOGGER.debug(f"车站等级 {inst.name} : {inst.level}")
+        if req.json()["features"] != []:
+            inst.level = req.json()["features"][0]["attributes"]["GRADE"]
+            if inst.level == " " or inst.level == None or inst.level == "":
+                inst.level = "未知"
         time.sleep(0.05)
         return inst
     except Exception as e:
         LOGGER.exception(e)
-        LOGGER.debug(f"车站等级 {inst.name} 获取失败")
         return inst
 
 def getSameCityStations(inst):
@@ -124,17 +120,15 @@ def getSameCityStations(inst):
         ss = []
         if "data" in req.json():
             for x in req.json()["data"]:
-                if x.split(",")[0] != restore_ky_telecode(inst.telecode):
+                if x.split(",")[0] != restore_ky_telecode(inst.telecode) and " " not in x.split(",")[1]:
                     ss.append({
                         "stationTelecode": fix_ky_telecode(x.split(",")[0]),
                         "stationName": x.split(",")[1]
                     })
             inst.sameCityStationList = ss
-            LOGGER.debug(f"同城车站 {inst.name} : {','.join([x['stationName'] for x in ss])}")
         return inst
     except Exception as e:
         LOGGER.exception(e)
-        LOGGER.debug(f"同城车站 {inst.name} 获取失败")
         return inst
 
 def get95572TmismList():
@@ -176,8 +170,25 @@ def get95572TmismList():
             STATION_95572_TMISM_CACHE[telecode] = tmism
     except Exception as e:
         LOGGER.exception(e)
-        LOGGER.debug("车站 TMISM 略表获取失败")
 
+def stationTogether():
+    for x in itertools.chain(getHYFWList(), getKYFWList()):
+        x.telecode = fix_ky_telecode(x.telecode)  # 修复徐州东+雅周bug
+        i = EXPORTER.getStation(x.telecode)
+        if i != None:
+            # 存在同名同码重复车站
+            if i["name"] != x.name:
+                i["level"] = "未知"
+            i["name"] = x.name
+            i["pinyin"] = x.pinyin
+            i["pinyinTriple"] = x.pinyinTriple
+            i["type"].append("客")
+            if "通" in i["type"]:
+                i["type"].remove("通")
+            EXPORTER.exportStationInfo(i)
+        else:
+            yield x
+# 对接接口
 
 def updateStationBelongInfo(station, bureau, belong):
     '''从列车时刻表更新车站所属路局及车务段'''
@@ -209,21 +220,5 @@ def queryTelecodeFromName(name):
     except:
         return ""
 
-
-def stationTogether():
-    yield from getHYFWList()
-    for x in getKYFWList():
-        try:
-            x.telecode = fix_ky_telecode(x.telecode)  # 修复徐州东+雅周bug
-            i = EXPORTER.getStation(x.telecode)
-            if i["name"] != x.name:
-                i["level"] = "未知"
-            i["name"] = x.name
-            i["pinyin"] = x.pinyin
-            i["pinyinTriple"] = x.pinyinTriple
-            i["type"].append("客")
-            if "通" in i["type"]:
-                i["type"].remove("通")
-            EXPORTER.exportStationInfo(i)
-        except:
-            yield x
+def kyLooplineStationMerge(telecode, name):
+    EXPORTER.updateStationInfo(queryTelecodeFromName(name), {"telecodeAlias": telecode}, True)

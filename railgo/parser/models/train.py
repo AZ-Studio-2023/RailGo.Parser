@@ -46,6 +46,35 @@ class TrainModel(object):
             "isFuxing": self.isFuxing
         }
 
+    @classmethod
+    def fromJson(self, json_data):
+        train = self()
+        field_mapping = {
+            "number": "number",
+            "numberFull": "numberFull",
+            "numberKind": "numberKind",
+            "code": "code",
+            "type": "type",
+            "diagramType": "diagramType",
+            "bureau": "bureau",
+            "bureauName": "bureauName",
+            "runner": "runner",
+            "carOwner": "carOwner",
+            "car": "car",
+            "diagram": "diagram",
+            "timetable": "timetable",
+            "spend": "spend",
+            "rundays": "rundays",
+            "route": "route",
+            "isFuxing": "isFuxing"
+        }
+        
+        for json_key, attr_name in field_mapping.items():
+            if json_key in json_data:
+                setattr(train, attr_name, json_data[json_key])
+
+        return train
+
     def __hash__(self):
         '''根据TrainCode分辨列车，避免一车多号导致缺少信息'''
         return hash(self.code)

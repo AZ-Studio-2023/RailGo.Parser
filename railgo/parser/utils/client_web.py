@@ -1,4 +1,6 @@
 '''网络Base'''
+from regex import F
+
 from railgo.config import LOGGER
 import requests
 import requests.utils
@@ -14,7 +16,7 @@ def get(url, headers={}, data={}):
     while tc < 5:
         try:
             r = requests.get(url, headers=headers,
-                             data=data)
+                             data=data, verify=False)
             if r.status_code == 200:
                 return r
             LOGGER.warning(f"Request Error {url}:{r.text}")
@@ -35,7 +37,7 @@ def post(url, headers={}, json={}, data={}):
     while tc < 5:
         try:
             r = requests.post(url, headers=headers,
-                              json=json, data=data)
+                              json=json, data=data, verify=False)
             if r.status_code == 200:
                 return r
             LOGGER.warning(f"Request Error {url}:{r.text}")

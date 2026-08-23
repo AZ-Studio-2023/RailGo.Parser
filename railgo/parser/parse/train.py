@@ -26,7 +26,6 @@ def getTrainList():
                 inst.code = car["train_code"]
                 inst._dataBeginDay = (datetime.datetime.now() + datetime.timedelta(days=x)).strftime('%Y%m%d')
                 yield inst
-                LOGGER.debug(f"车次列表提交 {car['ticket_no']}")
             time.sleep(0.5)
         time.sleep(1)
 
@@ -47,7 +46,6 @@ def getTrainMap(inst):
     for pk in raw["data"].keys():
         res += raw["data"][pk]["line"]
     inst.route = res
-    LOGGER.debug(f"车次地图信息拼接 {inst.number}: 完成")
     return inst
 
 def getCarBackup(inst):
@@ -95,8 +93,11 @@ def getTrainMain(inst):
                 inst.car = inst.car.replace("重联", "")
             elif inst.car == "" or inst.runner == "":
                 inst = getCarBackup(inst)
-            # inst.bureau = crj["data"]["trainDetail"]["stopTime"][0]["corporation_code"][0]
-            # inst.bureauName = BUREAU_SHORT_CODE.get(inst.bureau, "未知")
+
+            if crj["data"]["trainDetail"]["stopTime"][0]["corporation_code"][0] == "U":
+                # 广东城际的信息由广铁代维护 信息方维护的内容不准
+                inst.bureau = "U"
+                inst.bureauName = "广东城际"
             try:
                 inst.car = crj["data"]["trainDetail"]["trainsetTypeInfo"]["trainsetTypeName"]
                 if "重联" in inst.car:
@@ -108,13 +109,17 @@ def getTrainMain(inst):
             inst.timetable = []
             tctemp = set()
             for x in crj["data"]["trainDetail"]["stopTime"]:
+                if " " in x["stationName"]:
+                    # 合并车站
+                    kyLooplineStationMerge(fix_ky_telecode(x["stationTelecode"]), x["stationName"].replace(" ",""))
+
                 inst.timetable.append({
                     "trainCode": x["stationTrainCode"],
                     "day": int(x["dayDifference"]),
                     "arrive": x["arriveTime"][:2]+":"+x["arriveTime"][2:],
                     "depart": x["startTime"][:2]+":"+x["startTime"][2:],
                     "stopTime": int(x["stopover_time"]),
-                    "station": x["stationName"],
+                    "station": x["stationName"].replace(" ",""),
                     "stationTelecode": fix_ky_telecode(x["stationTelecode"]),
                     "runTime": int(x["runningTime"])
                 })
@@ -156,14 +161,12 @@ def getTrainMain(inst):
                 inst.car = CAR_STYLE_NAME_MAP[inst.car]
         except Exception as e:
             return getTrainMainDowngrade(inst)
-
-    LOGGER.debug(f"车次主信息 {inst.number}: 完成")
     return inst
 
 
 def getTrainMainDowngrade(inst):
     '''涉及停靠不上网售票车站车次时 wxxcx查不到 舍弃部分信息分类查询'''
-    LOGGER.debug(f"{inst.number} 降级查询")
+    LOGGER.warning(f"{inst.number} ({inst.code}) 被动降级")
     if len(inst.rundays) == 0:
         raise LookupError
 
@@ -178,7 +181,7 @@ def getTrainMainDowngrade(inst):
             "day": int(x["arrive_day_diff"]),
             "arrive": x["arrive_time"],
             "depart": x["start_time"],
-            "station": x["station_name"],
+            "station": x["station_name"].replace(" ", ""),
             "stationTelecode": x["station_telecode"],
             "stopTime": int(x["stopover_time"].replace("分钟", "") if "分钟" in x["stopover_time"] else 0),
             "runTime": int(x["running_time"].split(":")[0])*60 + int(x["running_time"].split(":")[1])
@@ -227,24 +230,20 @@ def getTrainRundays(inst):
     inst.rundays = []
     if "running_list" not in j:
         # 不存在车次
-        LOGGER.debug(f"{inst.number} 无开行计划")
-        raise LookupError
+        raise LookupError(f"{inst.number} ({inst.code}) 开行日查询回报删图，自动舍弃")
     for x in j["running_list"]:
         if x["flag"] == "1":
             rundays.append(x["date"])
 
     inst.rundays = rundays
-    try:
-        inst._beginDay = list(filter(lambda date: datetime.datetime.strptime(date, '%Y%m%d') >=
-                                     datetime.datetime.now(), inst.rundays))[0]
-        assert (datetime.datetime.strptime(inst._beginDay,
-                "%Y%m%d") - datetime.datetime.now()).days < 14
+    inst._beginDay = list(filter(lambda date: datetime.datetime.strptime(date, '%Y%m%d') >=
+                                 datetime.datetime.now(), inst.rundays))[0]
+    if (datetime.datetime.strptime(inst._beginDay,"%Y%m%d") - datetime.datetime.now()).days < 14:
         inst.bureau = j["bureau_code"]
         inst.bureauName = BUREAU_SHORT_CODE.get(inst.bureau, "未知")
-    except Exception:
-        raise LookupError
-
-    LOGGER.debug(f"车次开行计划 {inst.number}: 完成")
+    else:
+        raise LookupError(f"{inst.number} ({inst.code}) 开行日查询回报14日内无计划，自动舍弃")
+    
     return inst
 
 def getTrainKind(inst):
@@ -287,6 +286,7 @@ def getStopDistanceAndDiagram(inst):
             day = (datetime.datetime.strptime(inst._beginDay, "%Y%m%d") +
                    datetime.timedelta(days=stop["day"])).strftime("%Y%m%d")
             if (day+t) not in STATION_MAP_CACHE:
+                LOGGER.debug(f"{inst.number} ({inst.code}) 缓存 {day} {t} 站查信息未命中")
                 res = {}
                 r = post(
                     f"https://mobile.12306.cn/wxxcx/wechat/bigScreen/queryTrainByStation?train_start_date={day}&train_station_code={t}")
@@ -320,7 +320,6 @@ def getStopDistanceAndDiagram(inst):
                         res[x["station_train_code"]] = [
                             int(x["distance"]), x["train_type_name"], dtype]
                 STATION_MAP_CACHE[day+t] = res
-                LOGGER.debug(f"缓存车站车次: {day} {t}")
 
             inf = []
             for x in inst.numberFull:
@@ -345,13 +344,12 @@ def getStopDistanceAndDiagram(inst):
                     inst.type = inf[2]
     except Exception as e:
         LOGGER.exception(e)
-    LOGGER.debug(f"车次交路里程 {inst.number}: 完成")
     return inst
 
 def getTrainDistanceCRGT(inst):
     '''国铁吉讯：获取列车运行里程'''
     for x in inst.timetable[1:]:
-        if int(x["distance"]) == 0:
+        if int(x.get("distance", 0)) == 0:
             break
     else:
         return inst
@@ -374,11 +372,11 @@ def getTrainDistanceCRGT(inst):
             if x != 0:
                 distance_cache.append(ds[x]["miles"] + distance_cache[x-1])
             i = inst.timetable[x]
-            if i["distance"] == 0 and x!=0:
+            if i.get("distance", 0) == 0 and x!=0:
                 i["distance"] = distance_cache[x]
             inst.timetable[x] = i
     except:
-        LOGGER.warning(f"车次 {inst.number} 里程信息仍不完整")
+        LOGGER.warning(f"{inst.number} ({inst.code}) 里程信息不完整")
     return inst
 
 def getSpeed(inst):
@@ -389,5 +387,4 @@ def getSpeed(inst):
                 (inst.timetable[x]["runTime"] - inst.timetable[x-1]["runTime"]) / 60)
         except:
             inst.timetable[x]["speed"] = -1
-    LOGGER.debug(f"车次速度复算 {inst.number}: 完成")
     return inst
